@@ -20,14 +20,14 @@ XIUI and keep the stock frames hidden permanently.
 
 ## What this fork changes
 
-The addon now tracks whether the fishing mini-game is running and temporarily
-restores the affected frame for its duration. Everything else about the addon —
-the existing commands, the signature scans, the visibility writes — is
-untouched.
+While the fishing mini-game is running, the main party frame is kept visible.
+The alliance frames and the target frame stay hidden, and everything else about
+the addon — the commands, the signature scans, the visibility writes — is
+untouched. There is nothing to configure.
 
-Detection is a direct read of the local player's **entity status** each frame,
-which is the same value the client itself uses to decide what you're doing. No
-packet tracking, no chat-text matching, so it can't drift out of sync, isn't
+Detection is a direct read of the local player's **entity status**, the same
+value the client itself uses to decide what you're doing. No packet tracking and
+no chat-text matching, so it can't drift out of sync, isn't
 localisation-dependent, and can't get stuck showing frames.
 
 `FFXiMain.dll` holds a 16-byte-per-entry table of status names indexed by that
@@ -42,29 +42,20 @@ status value. The fishing entries are:
 | 57–62 | `(FISH_31)`–`(FISH_36)` | Catch / result states |
 
 The table decode is corroborated by the known ids sitting in it: `1 (B_IDLE)` is
-engaged, `33 (CAMP)` is resting, and `85 (MOUNT)` is mounted.
+engaged, `33 (CAMP)` is resting, and `85 (MOUNT)` is mounted. Engaged, resting,
+mounted, synthing, chocobo riding and sitting are therefore all correctly *not*
+fishing.
 
 ## Commands
 
-Everything upstream supports, plus:
+Unchanged from upstream:
 
 | Command | Description |
 | --- | --- |
-| `/hideparty fishing` | Show the current mode. |
-| `/hideparty fishing party0` | Restore the main party frame while fishing. **(default)** |
-| `/hideparty fishing party1` | Restore the first alliance frame. |
-| `/hideparty fishing party2` | Restore the second alliance frame. |
-| `/hideparty fishing party` | Restore the party and both alliance frames. |
-| `/hideparty fishing target` | Restore the target frame. |
-| `/hideparty fishing all` | Restore every frame the addon hides. |
-| `/hideparty fishing off` | Upstream behaviour; restore nothing while fishing. |
-
-The mode is saved per character under
-`config/addons/hideparty/<Character_ID>/settings.lua`.
-
-`party0` is the default because the stamina bar was confirmed in-game to live
-in the main party frame. The other modes are kept so the behaviour can be
-adjusted without editing the addon.
+| `/hideparty` | Toggle the party frames. |
+| `/hideparty hide` / `h` | Hide the party frames. |
+| `/hideparty show` / `s` | Show the party frames. |
+| `/hideparty help` | Show the addon help. |
 
 ## Installation
 
@@ -83,9 +74,7 @@ the existing `addons/hideparty` directory first. Load it the usual way:
 
 ## Credits
 
-Original addon by **atom0s** and the Ashita Development Team. Fishing-mini-game
-detection follows the approach already used by the HorizonXI `fishaid` and
-`hxifish` addons.
+Original addon by **atom0s** and the Ashita Development Team.
 
 ## License
 
