@@ -25,18 +25,24 @@ restores the affected frame for its duration. Everything else about the addon �
 the existing commands, the signature scans, the visibility writes — is
 untouched.
 
-Fishing state is read from packets rather than chat text, so it isn't
-localisation-dependent:
+Detection is a direct read of the local player's **entity status** each frame,
+which is the same value the client itself uses to decide what you're doing. No
+packet tracking, no chat-text matching, so it can't drift out of sync, isn't
+localisation-dependent, and can't get stuck showing frames.
 
-| Signal | Meaning |
-| --- | --- |
-| outgoing `0x01A`, `uint16` @ `0x0A` == `14` | Cast Fishing Rod — session started |
-| incoming `0x037`, `uint8` @ `0x30` | The server's own fishing flag: `0` = not fishing |
-| outgoing `0x110`, `uint16` @ `0x0E` == `4` | Gave up / ended |
-| incoming `0x00A` / `0x00B`, outgoing `0x0E7` | Zoned or logged out |
+`FFXiMain.dll` holds a 16-byte-per-entry table of status names indexed by that
+status value. The fishing entries are:
 
-Because `0x037` both sets and clears the flag, the addon mirrors the server and
-cannot get stuck showing frames if a start or end packet is missed.
+| Status | Name | Meaning |
+| --- | --- | --- |
+| 6 | `(FISHING)` | Rod cast, line in the water |
+| 38–43 | `(FISHING1)`–`(FISHING6)` | Mini-game reeling states |
+| 50, 56 | `(FISH_2)`, `(FISH_3)` | Catch / result states |
+| 51–53 | `(FISHF)`, `(FISHR)`, `(FISHL)` | Directional reeling states |
+| 57–62 | `(FISH_31)`–`(FISH_36)` | Catch / result states |
+
+The table decode is corroborated by the known ids sitting in it: `1 (B_IDLE)` is
+engaged, `33 (CAMP)` is resting, and `85 (MOUNT)` is mounted.
 
 ## Commands
 

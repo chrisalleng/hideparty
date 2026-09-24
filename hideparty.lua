@@ -20,7 +20,7 @@
 --]]
 
 --[[
-* Local modification (v1.3):
+* Local modification (v1.4):
 *
 * The fishing mini-games stamina bar is drawn inside one of the same game
 * primitives this addon hides, so hiding the frames also hides the bar. The
@@ -40,11 +40,16 @@
 * The stamina bar was confirmed in-game to live in the main party frame
 * (party0), which is why that is the default. The other modes are kept so the
 * behaviour can be adjusted without editing this file.
+*
+* The mini-game is detected by reading the local players entity status each
+* frame and testing it against the clients fishing status ids. This is a direct
+* read of the state the client itself uses, so it cannot drift out of sync and
+* needs no packet tracking.
 --]]
 
 addon.name      = 'hideparty';
 addon.author    = 'atom0s';
-addon.version   = '1.3';
+addon.version   = '1.4';
 addon.desc      = 'Adds slash commands to hide, show, or toggle the games party frames.';
 addon.link      = 'https://ashitaxi.com/';
 
@@ -56,14 +61,13 @@ local settings  = require 'settings';
 -- Addon Default Settings
 local default_settings = T{
     -- The frames to restore while the fishing mini-game is active.
-    -- Valid values: 'party', 'party0', 'party1', 'party2', 'target', 'all', 'off'
+    -- Valid values: 'party0', 'party1', 'party2', 'party', 'target', 'all', 'off'
     fishing_mode = 'party0',
 };
 
 -- Addon Variables
 local hideparty = {
     show = 1,
-    fishing = false,
     settings = settings.load(default_settings),
     ptrs = {
       target = 0,
@@ -85,6 +89,28 @@ local fishing_mode_frames = T{
     ['target']  = T{ party0 = 0, party1 = 0, party2 = 0, target = 1 },
     ['all']     = T{ party0 = 1, party1 = 1, party2 = 1, target = 1 },
     ['off']     = T{ party0 = 0, party1 = 0, party2 = 0, target = 0 },
+};
+
+--[[
+* The entity status ids the client uses while fishing.
+*
+* The client keeps a 16-byte-per-entry table of status names in FFXiMain.dll,
+* indexed by the entity status value. The fishing entries are:
+*
+*    6 (FISHING)               Rod cast; line in the water.
+*   38 - 43 (FISHING1..6)      Mini-game reeling states.
+*   50 (FISH_2), 56 (FISH_3)   Catch / result states.
+*   51 - 53 (FISHF/R/L)        Directional reeling states.
+*   57 - 62 (FISH_31..36)      Catch / result states.
+*
+* Verified against the known ids in the same table: 1 (B_IDLE) is engaged,
+* 33 (CAMP) is resting, and 85 (MOUNT) is mounted.
+--]]
+local fishing_statuses = T{
+    [6]  = true,
+    [38] = true, [39] = true, [40] = true, [41] = true, [42] = true, [43] = true,
+    [50] = true, [51] = true, [52] = true, [53] = true,
+    [56] = true, [57] = true, [58] = true, [59] = true, [60] = true, [61] = true, [62] = true,
 };
 
 --[[
@@ -140,6 +166,20 @@ local frames_hidden = T{ party0 = 0, party1 = 0, party2 = 0, target = 0 };
 local frames_visible = T{ party0 = 1, party1 = 1, party2 = 1, target = 1 };
 
 --[[
+* Returns true if the local player is currently fishing.
+*
+* @return {boolean} True if the fishing mini-game is active, false otherwise.
+--]]
+local function is_fishing()
+    local player = GetPlayerEntity();
+    if (player == nil) then
+        return false;
+    end
+
+    return fishing_statuses[player.Status] == true;
+end
+
+--[[
 * Returns the visibility to apply to each frame this frame.
 *
 * @return {table} Table of per-frame visibility values.
@@ -152,7 +192,7 @@ local function get_visibility()
 
     -- Temporarily restore frames while the fishing mini-game is running so its
     -- stamina bar is not hidden along with them..
-    if (hideparty.fishing) then
+    if (is_fishing()) then
         return fishing_mode_frames[hideparty.settings.fishing_mode] or frames_hidden;
     end
 
@@ -264,55 +304,6 @@ ashita.events.register('command', 'command_cb', function (e)
 
     -- Unhandled: Print help information..
     print_help(true);
-end);
-
---[[
-* event: packet_out
-* desc : Event called when the game is sending a packet to the server.
---]]
-ashita.events.register('packet_out', 'packet_out_cb', function (e)
-    -- Action packet; used to detect the fishing rod being cast..
-    if (e.id == 0x01A) then
-        -- Category 14 (0x0E) is 'Cast Fishing Rod'..
-        if (struct.unpack('H', e.data, 0x0A + 1) == 14) then
-            hideparty.fishing = true;
-        end
-        return;
-    end
-
-    -- Fishing action packet; action 4 ends the current fishing attempt..
-    if (e.id == 0x110) then
-        if (struct.unpack('H', e.data, 0x0E + 1) == 4) then
-            hideparty.fishing = false;
-        end
-        return;
-    end
-
-    -- Logout..
-    if (e.id == 0x0E7) then
-        hideparty.fishing = false;
-        return;
-    end
-end);
-
---[[
-* event: packet_in
-* desc : Event called when the game is receiving a packet from the server.
---]]
-ashita.events.register('packet_in', 'packet_in_cb', function (e)
-    -- Zone in / zone out..
-    if (e.id == 0x00A or e.id == 0x00B) then
-        hideparty.fishing = false;
-        return;
-    end
-
-    -- Char update; byte 0x30 holds the servers fishing state. This mirrors the
-    -- servers own flag, so a missed start or end packet cannot leave the addon
-    -- stuck in the wrong state..
-    if (e.id == 0x037) then
-        hideparty.fishing = struct.unpack('B', e.data, 0x30 + 1) ~= 0;
-        return;
-    end
 end);
 
 --[[
